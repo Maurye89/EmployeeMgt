@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using EmployeeMgt.Models;
+using EmployeeMgt.Services.Interface;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EmployeeMgt.Controllers
@@ -7,21 +10,24 @@ namespace EmployeeMgt.Controllers
     [ApiController]
     public class LoginController : ControllerBase
     {
+       private readonly IAuthService _authService;  
+        public LoginController(IAuthService authService)
+        {
+            _authService = authService;
+        }
+
+
         // POST: api/employee/login
         [HttpGet]
-        public IActionResult Login()
+        [HttpPost("login")]
+        public async Task<IActionResult> Login(string username,string password)
         {
-            try
-            {
-                // Placeholder implementation: always return success
-                return Ok(new { success = true, message = "Login successful" });
-            }
-            catch (Exception ex)
-            {
-                // Return generic server error with minimal details
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { success = false, message = "Login failed", error = ex.Message });
-            }
+            var result = await _authService.AuthenticateAsync(username, password);
+
+            if (!result.Success)
+                return Unauthorized(new { success = false, message = "Invalid credentials" });
+
+            return Ok(new { success = true, token = result.Token });
         }
     }
 }

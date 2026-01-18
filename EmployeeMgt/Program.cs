@@ -1,3 +1,4 @@
+using EmployeeMgt;
 using EmployeeMgt.DapperModel;
 using EmployeeMgt.Services.Interface;
 using EmployeeMgt.Services.Repository;
@@ -63,6 +64,9 @@ builder.Services.AddScoped<IEmployee, EmployeeRepo>();
 
 var app = builder.Build();
 
+// Register custom middleware
+app.UseCustomMiddleware();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -77,3 +81,10 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+public static class CustomMiddlewareExtensions
+{
+    public static IApplicationBuilder UseCustomMiddleware(this IApplicationBuilder builder)
+    {
+        return builder.UseMiddleware<CustomMiddleware>();
+    }
+}

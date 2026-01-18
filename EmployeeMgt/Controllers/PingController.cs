@@ -8,7 +8,7 @@ namespace EmployeeMgt.Controllers
     public class PingController : ControllerBase
     {
         [HttpGet]
-        [Route("Health")]
+        [Route("Ping")]
         public IActionResult Ping()
         {
             return Ok("Pong");
