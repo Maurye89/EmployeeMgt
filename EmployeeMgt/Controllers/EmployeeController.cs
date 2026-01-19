@@ -3,6 +3,8 @@ using EmployeeMgt.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
+using System.Text.Json;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace EmployeeMgt.Controllers
@@ -13,12 +15,15 @@ namespace EmployeeMgt.Controllers
     {
         private readonly EmployeeMgtContext _context;
         private readonly IEmployee _Employee;
+        private readonly IConnectionMultiplexer _redis;
+        private readonly IDatabase _cache;
 
 
-        public EmployeeController(EmployeeMgtContext employeeMgtContext, IEmployee employee)
+        public EmployeeController(EmployeeMgtContext employeeMgtContext, IEmployee employee, IConnectionMultiplexer redis)
         {
             _context = employeeMgtContext;
             _Employee = employee;
+            _cache = redis.GetDatabase();
         }
 
         //// GET: api/employee/GetEmployeeDetails
@@ -138,31 +143,84 @@ namespace EmployeeMgt.Controllers
 
         //---------------- Get data using service layer with stored procedure----------------//
         // GET: api/employee/GetEmpDetails
+        //[HttpGet]
+        //[Route("EmpDetails/{iEmpID}")]
+        //public async Task<IActionResult> GetEmpDetails(int iEmpID)
+
+        //{
+        //    string cacheKey = $"EmpDetails:{iEmpID}";
+        //    // Try to get from cache
+        //    var cachedData = await _cache.StringGetAsync(cacheKey);
+        //    if (cachedData.HasValue)
+        //    {
+        //        var employees = JsonSerializer.Deserialize<List<Employee>>(cachedData);
+        //        return Ok(employees);
+        //    }
+
+        //    // Call repository (returns ActionResult<List<Employee>>)
+        //    var repoResult = await _Employee.GetEmployeeDetails(iEmpID);
+
+        //    // If repository returned a specific IActionResult (e.g. NotFound, Problem), forward it
+        //    if (repoResult.Result != null)
+        //    {
+        //        return repoResult.Result;
+        //    }
+
+        //    // Otherwise repo returned a Value
+        //    var employees = repoResult.Value ?? new List<Employee>();
+
+        //    if (employees.Count == 0)
+        //    {
+        //        return NotFound(new { success = false, message = "Employee not found" });
+        //    }
+
+        //    return Ok(employees);
+
+        //}
+
+
+
         [HttpGet]
         [Route("EmpDetails/{iEmpID}")]
         public async Task<IActionResult> GetEmpDetails(int iEmpID)
-
         {
-            // Call repository (returns ActionResult<List<Employee>>)
-            var repoResult = await _Employee.GetEmployeeDetails(iEmpID);
-
-            // If repository returned a specific IActionResult (e.g. NotFound, Problem), forward it
-            if (repoResult.Result != null)
+            try
             {
-                return repoResult.Result;
+                string cacheKey = $"EmpDetails:{iEmpID}";
+
+                // Try to get from cache
+                var cachedData = await _cache.StringGetAsync(cacheKey);  // API reduce
+                if (cachedData.HasValue)
+                {
+                    var employees = JsonSerializer.Deserialize<List<Employee>>(cachedData.ToString());
+                    return Ok(employees);
+                }
+
+                // Call repository
+                var repoResult = await _Employee.GetEmployeeDetails(iEmpID);
+
+                if (repoResult.Result != null)
+                {
+                    return repoResult.Result;
+                }
+
+                var employeesFromDb = repoResult.Value ?? new List<Employee>();
+
+                if (employeesFromDb.Count == 0)
+                {
+                    return NotFound(new { success = false, message = "Employee not found" });
+                }
+
+                // Save to cache with expiration (e.g., 1 minutes)
+                await _cache.StringSetAsync(cacheKey,JsonSerializer.Serialize(employeesFromDb),TimeSpan.FromMinutes(1)
+                );
+
+                return Ok(employeesFromDb);
             }
-
-            // Otherwise repo returned a Value
-            var employees = repoResult.Value ?? new List<Employee>();
-
-            if (employees.Count == 0)
+            catch (Exception ex)
             {
-                return NotFound(new { success = false, message = "Employee not found" });
+                throw ex;
             }
-
-            return Ok(employees);
-
         }
-
     }
 }

@@ -5,6 +5,7 @@ using EmployeeMgt.Services.Repository;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using StackExchange.Redis;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,6 +28,17 @@ builder.Services.AddControllers();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// use for azure cache for radis connection string
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var configuration = builder.Configuration.GetConnectionString("RedisConnection");
+    var options = ConfigurationOptions.Parse(configuration);
+    options.AbortOnConnectFail = false; // keep retrying
+    options.ConnectTimeout = 100000;     // increase timeout (10s)
+    return ConnectionMultiplexer.Connect(options);
+});
+
 
 // Add Authentication
 builder.Services.AddAuthentication(options =>
@@ -61,7 +73,6 @@ builder.Services.AddTransient<DapperDBContext>();
 // Add stored-proc service (uses ProcedureConnection from configuration)
 builder.Services.AddScoped<IEmployee, EmployeeRepo>();
 
-
 var app = builder.Build();
 
 // Register custom middleware
@@ -81,6 +92,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
 public static class CustomMiddlewareExtensions
 {
     public static IApplicationBuilder UseCustomMiddleware(this IApplicationBuilder builder)
